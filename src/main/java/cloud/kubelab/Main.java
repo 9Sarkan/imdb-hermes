@@ -1,5 +1,6 @@
 package cloud.kubelab;
 
+import cloud.kubelab.search.ImdbHermes;
 import cloud.kubelab.search.ImdbIndexer;
 
 import java.io.IOException;
@@ -16,13 +17,18 @@ public class Main {
         String indexDirPath = args.length > 1 ? args[1] : "lucene-index";
 
         try {
-            ImdbIndexer indexer = new ImdbIndexer(indexDirPath);
-            indexer.indexFile(dataFilePath);
-            indexer.close();
+//            ImdbIndexer indexer = new ImdbIndexer(indexDirPath);
+//            indexer.indexFile(dataFilePath);
+//            indexer.close();
+
+            ImdbHermes hermes  = new ImdbHermes(indexDirPath);
+            hermes.search("BoJack Horseman");
+
         } catch (IOException e) {
             System.err.println("Fatal error during indexing: " + e.getMessage());
             e.printStackTrace();
         }
+
 
 
     }
