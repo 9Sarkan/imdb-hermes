@@ -11,10 +11,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.store.ByteBuffersDirectory;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
-import org.apache.lucene.store.IOContext;
+import org.apache.lucene.store.*;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -26,29 +23,23 @@ public class ImdbHermes {
     private final StoredFields storedFields;
 
     public ImdbHermes(String indexDirPath) throws IOException {
-        try (Directory diskDirectory = FSDirectory.open(Paths.get(indexDirPath))) {
-            ByteBuffersDirectory memoryDirectory = new ByteBuffersDirectory();
+        Directory mmapDirectory = new MMapDirectory(Paths.get(indexDirPath));
 
-            for (String file : diskDirectory.listAll()) {
-                memoryDirectory.copyFrom(diskDirectory, file, file, IOContext.READONCE);
-            }
+        this.reader = DirectoryReader.open(mmapDirectory);
+        this.searcher = new IndexSearcher(reader);
+        this.storedFields = reader.storedFields();
 
-            this.reader = DirectoryReader.open(memoryDirectory);
-            this.searcher = new IndexSearcher(reader);
-            this.storedFields = reader.storedFields();
+        StandardAnalyzer analyzer = new StandardAnalyzer();
+        this.parser = new QueryParser("title", analyzer);
 
-            StandardAnalyzer analyzer = new StandardAnalyzer();
-            this.parser = new QueryParser("title", analyzer);
-
-            System.out.println("Index loaded in memory");
-        }
+        System.out.println("Index loaded in memory");
     }
 
     public void search(String queryStr) {
         try {
             Query query = this.parser.parse(queryStr);
             TopDocs hits = searcher.search(query, 10);
-            System.out.println("Found "+ hits.totalHits.value() + "\tresults for: " + queryStr);
+            System.out.println("Found "+ hits.totalHits.value() + "\nquery: " + queryStr);
 
             for (ScoreDoc scoreDoc : hits.scoreDocs) {
                 Document doc = storedFields.document(scoreDoc.doc);
