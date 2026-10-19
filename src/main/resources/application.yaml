@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: hermes
+logging:
+  level:
+    cloud.kubelab.hermes: DEBUG
+hermes:
+  index:
+    path: ./data/index

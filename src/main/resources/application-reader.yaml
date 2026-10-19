@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: reader
+server:
+  port: 8081
+logging:
+  level:
+    cloud.kubelab.hermes: DEBUG

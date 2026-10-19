@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: writer
+server:
+  port: 8082
+logging:
+  level:
+    cloud.kubelab.hermes: DEBUG
+hermes:
+  index:
+    seed-file-path: file:./data/title.basics.sample.tsv

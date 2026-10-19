@@ -1,0 +1,178 @@
+openapi: 3.0.3
+
+info:
+  title: Hermes Reader API
+  version: 0.1.0
+  description: |
+    Search over the Lucene index built by the Hermes writer.
+
+servers:
+  - url: http://localhost:8081
+    description: Local reader (--spring.profiles.active=reader)
+
+tags:
+  - name: search
+    description: Query the title index
+
+paths:
+  /search:
+    get:
+      tags: [search]
+      operationId: search
+      summary: Find titles by a single field
+      description: |
+        Runs one query against one indexed field. The query type is determined by
+        how that field was indexed, which is why `field` is a closed set:
+
+        * `id`, `titleType`, `genre` — exact match on the stored value, case-sensitive
+        * `primaryTitle` — phrase match; the value is analyzed exactly as it was at
+          index time, so matching is case-insensitive and multi-word input must
+          appear as an adjacent, in-order phrase
+        * `startYear` — exact numeric match
+
+        `genre` is multi-valued: a title with genres `Documentary,Short` matches a
+        query for either value.
+      parameters:
+        - name: field
+          in: query
+          required: true
+          description: Which indexed field to search.
+          schema:
+            $ref: '#/components/schemas/SearchField'
+        - name: value
+          in: query
+          required: true
+          description: >
+            The value to look for. Must contain at least one searchable term after
+            analysis, and must parse as an integer when `field` is `startYear`.
+          schema:
+            type: string
+            minLength: 1
+          example: Drama
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of hits to return. Does not affect `totalHits`.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Search executed. May contain zero hits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                byGenre:
+                  summary: Multi-valued keyword field
+                  value:
+                    hits:
+                      - id: tt0000001
+                        titleType: short
+                        primaryTitle: Carmencita
+                        startYear: 1894
+                        genres: [Documentary, Short]
+                        score: 1.8472
+                    totalHits: 4932
+                noMatches:
+                  summary: Valid query, nothing found
+                  value:
+                    hits: []
+                    totalHits: 0
+        '400':
+          description: |
+            The request could not be turned into a query — an unknown `field`, a
+            `value` with no searchable terms after analysis, or a non-numeric
+            `value` for `startYear`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                noTerms:
+                  value:
+                    message: 'No searchable terms in: !!!'
+                notNumeric:
+                  value:
+                    message: 'startYear requires an integer value, got: abc'
+        '500':
+          description: The index could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+components:
+  schemas:
+
+    SearchField:
+      type: string
+      description: |
+        The indexed fields that can be queried. Mirrors `IndexField` in the
+        application — the two must be kept in step.
+      enum: [id, titleType, primaryTitle, startYear, genre]
+      example: genre
+
+    SearchResponse:
+      type: object
+      required: [hits, totalHits]
+      properties:
+        hits:
+          type: array
+          description: Up to `limit` matching titles, most relevant first.
+          items:
+            $ref: '#/components/schemas/TitleHit'
+        totalHits:
+          type: integer
+          format: int64
+          description: >
+            Total matching documents in the index, independent of `limit`.
+          example: 4932
+
+    TitleHit:
+      type: object
+      required: [id, titleType, primaryTitle, genres, score]
+      properties:
+        id:
+          type: string
+          description: IMDb title identifier (`tconst`).
+          example: tt0000001
+        titleType:
+          type: string
+          description: Kind of title, e.g. `movie`, `short`, `tvSeries`.
+          example: short
+        primaryTitle:
+          type: string
+          example: Carmencita
+        startYear:
+          type: integer
+          format: int32
+          nullable: true
+          description: >
+            Release year. Absent for titles with no known year — roughly 12% of
+            the IMDb dataset.
+          example: 1894
+        genres:
+          type: array
+          description: Zero or more genres. Empty when the title has none recorded.
+          items:
+            type: string
+          example: [Documentary, Short]
+        score:
+          type: number
+          format: float
+          description: Lucene relevance score. Comparable only within one response.
+          example: 1.8472
+
+    ApiError:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: Human-readable explanation of what was wrong with the request.
+          example: 'No searchable terms in: !!!'
